@@ -10,3 +10,8 @@ SpringAfterJobBeforeJobExample:
 This Project contains two functionality:
 1: BeforeJob & AfterJob functionality
 2: BeforeStep & AfterStep functionality
+
+
+
+SpringInheritingParentJobExample:
+This project is use to define how to inherit the functionality of Parent Job in Child Job 
