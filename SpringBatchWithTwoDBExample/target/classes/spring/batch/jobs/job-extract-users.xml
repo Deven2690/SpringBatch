@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:batch="http://www.springframework.org/schema/batch" xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/batch 
+		http://www.springframework.org/schema/batch/spring-batch-2.2.xsd
+		http://www.springframework.org/schema/beans 
+		http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+		http://www.springframework.org/schema/util 
+		http://www.springframework.org/schema/util/spring-util-3.2.xsd
+		">
+
+	<import resource="../config/context.xml" />
+	<import resource="../config/database.xml" />
+
+	<bean id="user" class="com.devendra.crazymind.User"></bean>
+
+	<job id="testJob" xmlns="http://www.springframework.org/schema/batch">
+		<step id="step1" next="step2">
+			<tasklet>
+				<chunk reader="itemReader" writer="flatFileItemWriter"
+					commit-interval="1" />
+			</tasklet>
+		</step>
+		<step id="step2">
+			<tasklet>
+				<chunk reader="csvItemReader" writer="DBItemWriter"
+					commit-interval="1" />
+			</tasklet>
+		</step>
+	</job>
+
+
+	<!-- This configuration read data from DB which well get write to CSV file 
+		org.springframework.batch.item.database.JdbcCursorItemReader<T> Simple item 
+		reader implementation that opens a JDBC cursor and continually retrieves 
+		the next row in the ResultSet. The statement used to open the cursor is created 
+		with the 'READ_ONLY' option since a non read-only cursor may unnecessarily 
+		lock tables or rows. It is also opened with 'TYPE_FORWARD_ONLY' option. By 
+		default the cursor will be opened using a separate connection which means 
+		that it will not participate in any transactions created as part of the step 
+		processing. Each call to read() will call the provided RowMapper, passing 
+		in the ResultSet.  -->
+	<bean id="itemReader"
+		class="org.springframework.batch.item.database.JdbcCursorItemReader"
+		scope="step">
+		<property name="dataSource" ref="dataSource" />
+		<property name="sql"
+			value="select ID, USER_LOGIN, USER_PASS, AGE from USERS where age > #{jobParameters['age']}" />
+		<property name="rowMapper">
+			<bean class="com.devendra.crazymind.UserRowMapper" />
+		</property>
+	</bean>
+
+
+	<!-- org.springframework.batch.item.database.JdbcPagingItemReader<T> org.springframework.batch.item.ItemReader 
+		for reading database records using JDBC in a paging fashion. It executes 
+		the SQL built by the PagingQueryProvider to retrieve requested data. The 
+		query is executed using paged requests of a size specified in setPageSize(int). 
+		Additional pages are requested when needed as read() method is called, returning 
+		an object corresponding to current position. On restart it uses the last 
+		sort key value to locate the first page to read (so it doesn't matter if 
+		the successfully processed itmes have been removed or modified). The performance 
+		of the paging depends on the database specific features available to limit 
+		the number of returned rows. Setting a fairly large page size and using a 
+		commit interval that matches the page size should provide better performance. 
+		The implementation is thread-safe in between calls to open(ExecutionContext), 
+		but remember to use saveState=false if used in a multi-threaded client (no 
+		restart available).  -->
+
+	<bean id="pagingItemReader"
+		class="org.springframework.batch.item.database.JdbcPagingItemReader"
+		scope="step">
+		<property name="dataSource" ref="dataSource" />
+		<property name="queryProvider">
+			<bean
+				class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
+				<property name="dataSource" ref="dataSource" />
+				<property name="selectClause" value="select id, user_login, user_pass, age" />
+				<property name="fromClause" value="from users" />
+				<property name="whereClause" value="where user_login=:name" />
+				<property name="sortKey" value="id" />
+			</bean>
+		</property>
+		<property name="parameterValues">
+			<map>
+				<entry key="name" value="#{jobParameters['name']}" />
+			</map>
+		</property>
+		<property name="pageSize" value="10" />
+		<property name="rowMapper">
+			<bean class="com.devendra.crazymind.UserRowMapper" />
+		</property>
+	</bean>
+	
+	
+	<!-- 
+	
+	    This configuration read daat from CSV file org.springframework.batch.item.file.FlatFileItemReader<T> 
+		Restartable ItemReader that reads lines from input setResource(Resource). 
+		Line is defined by the setRecordSeparatorPolicy(RecordSeparatorPolicy) and 
+		mapped to item using setLineMapper(LineMapper). If an exception is thrown 
+		during line mapping it is rethrown as FlatFileParseException adding information 
+		about the problematic line and its line number. 
+	-->
+	<bean id="csvItemReader" class="org.springframework.batch.item.file.FlatFileItemReader">
+		<property name="resource" value="file:csv/outputs/users.csv" />
+		<property name="lineMapper">
+			<bean class="org.springframework.batch.item.file.mapping.DefaultLineMapper">
+				<!-- split it -->
+				<property name="lineTokenizer">
+					<bean
+						class="org.springframework.batch.item.file.transform.DelimitedLineTokenizer">
+						<property name="names" value="id, username, password, age" />
+					</bean>
+				</property>
+				<property name="fieldSetMapper">
+					<bean
+						class="org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper">
+						<property name="prototypeBeanName" value="user" />
+					</bean>
+				</property>
+			</bean>
+		</property>
+	</bean>
+
+
+	<!-- 
+	
+	   This configuration write the data read from CSV file to Postgres DB 
+		org.springframework.batch.item.database.JdbcBatchItemWriter<T> ItemWriter 
+		that uses the batching features from NamedParameterJdbcTemplate to execute 
+		a batch of statements for all items provided. The user must provide an SQL 
+		query and a special callback in the for of either ItemPreparedStatementSetter, 
+		or a ItemSqlParameterSourceProvider. You can use either named parameters 
+		or the traditional '?' placeholders. If you use the named parameter support 
+		then you should provide a ItemSqlParameterSourceProvider, otherwise you should 
+		provide a ItemPreparedStatementSetter. This callback would be responsible 
+		for mapping the item to the parameters needed to execute the SQL statement. 
+		It is expected that write(List) is called inside a transaction. The writer 
+		is thread safe after its properties are set (normal singleton behavior), 
+		so it can be used to write in multiple concurrent transactions. 
+	-->
+	<bean id="DBItemWriter"
+		class="org.springframework.batch.item.database.JdbcBatchItemWriter">
+		<property name="dataSource" ref="dataSourceAlice" />
+		<property name="sql"
+			value="insert into users(id,user_login,user_pass,age) values (:id, :username, :password, :age)" />
+		<property name="itemSqlParameterSourceProvider">
+			<bean
+				class="org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider">
+			</bean>
+		</property>
+	</bean>
+
+
+	<!-- 
+	    This configuration is for XML writer org.springframework.batch.item.xml.StaxEventItemWriter<T> 
+		An implementation of ItemWriter which uses StAX and Marshaller for serializing 
+		object to XML. This item writer also provides restart, statistics and transaction 
+		features by implementing corresponding interfaces. The implementation is 
+		*not* thread-safe. 
+	-->
+	<bean id="itemWriter" class="org.springframework.batch.item.xml.StaxEventItemWriter">
+		<property name="resource" value="file:xml/outputs/users.xml" />
+		<property name="marshaller" ref="userUnmarshaller" />
+		<property name="rootTagName" value="users" />
+	</bean>
+
+	<!-- 
+	
+	    org.springframework.oxm.xstream.XStreamMarshaller Implementation of 
+		the Marshaller interface for XStream. By default, XStream does not require 
+		any further configuration and can (un)marshal any class on the classpath. 
+		As such, it is not recommended to use the XStreamMarshaller to unmarshal 
+		XML from external sources (i.e. the Web), as this can result in security 
+		vulnerabilities. If you do use the XStreamMarshaller to unmarshal external 
+		XML, set the supportedClasses and converters properties (possibly using a 
+		CatchAllConverter) or override the customizeXStream(XStream) method to make 
+		sure it only accepts the classes you want it to support. Due to XStream's 
+		API, it is required to set the encoding used for writing to OutputStreams. 
+		It defaults to UTF-8. NOTE: XStream is an XML serialization library, not 
+		a data binding library. Therefore, it has limited namespace support. As such, 
+		it is rather unsuitable for usage within Web Services. This marshaller requires 
+		XStream 1.4.5 or higher, as of Spring 4.3. Note that XStream construction 
+		has been reworked in 4.0, with the stream driver and the class loader getting 
+		passed into XStream itself now. 
+	-->
+	<bean id="userUnmarshaller" class="org.springframework.oxm.xstream.XStreamMarshaller">
+		<property name="aliases">
+			<util:map id="aliases">
+				<entry key="user" value="com.devendra.crazymind.User" />
+			</util:map>
+		</property>
+	</bean>
+
+	<!-- 
+	    This configuration is CSV file writer org.springframework.batch.item.file.FlatFileItemWriter<T> 
+		This class is an item writer that writes data to a file or stream. The writer 
+		also provides restart. The location of the output file is defined by a Resource 
+		and must represent a writable file. Uses buffered writer to improve performance. 
+		The implementation is *not* thread-safe. 
+	-->
+	<bean id="flatFileItemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter">
+
+		<!-- The Path of result file -->
+		<property name="resource" value="file:csv/outputs/users.csv" />
+
+		<!-- This congifuration allow to append result to existing results <property 
+			name="appendAllowed" value="true" /> -->
+
+		<!-- This Below property delete the already created or existed record -->
+		<property name="shouldDeleteIfExists" value="true" />
+
+
+		<property name="lineAggregator">
+			<bean
+				class="org.springframework.batch.item.file.transform.DelimitedLineAggregator">
+				<property name="delimiter" value="," />
+				<property name="fieldExtractor">
+					<bean
+						class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
+						<property name="names" value="id, username, password, age" />
+					</bean>
+				</property>
+			</bean>
+		</property>
+	</bean>
+</beans>
