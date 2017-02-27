@@ -1,0 +1,45 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+		http://www.springframework.org/schema/beans 
+		http://www.springframework.org/schema/beans/spring-beans-3.2.xsd">
+
+	<!-- 
+	    stored job-meta in memory org.springframework.batch.core.repository.support.MapJobRepositoryFactoryBean 
+		A FactoryBean that automates the creation of a SimpleJobRepository using 
+		non-persistent in-memory DAO implementations. This repository is only really 
+		intended for use in testing and rapid prototyping. In such settings you might 
+		find that ResourcelessTransactionManager is useful (as long as your business 
+		logic does not use a relational database). Not suited for use in multi-threaded 
+		jobs with splits, although it should be safe to use in a multi-threaded step.
+	 --> 
+	<bean id="jobRepository"
+		class="org.springframework.batch.core.repository.support.MapJobRepositoryFactoryBean">
+		<property name="transactionManager" ref="transactionManager" />
+	</bean>
+	
+	
+ 	
+	<bean id="transactionManager"
+		class="org.springframework.batch.support.transaction.ResourcelessTransactionManager" />
+
+	<!-- 	
+	    org.springframework.batch.core.launch.support.SimpleJobLauncher Simple 
+		implementation of the JobLauncher interface. The Spring Core TaskExecutor 
+		interface is used to launch a Job. This means that the type of executor set 
+		is very important. If a SyncTaskExecutor is used, then the job will be processed 
+		<strong>within the same thread that called the launcher.</strong> Care should 
+		be taken to ensure any users of this class understand fully whether or not 
+		the implementation of TaskExecutor used will start tasks synchronously or 
+		asynchronously. The default setting uses a synchronous task executor. There 
+		is only one required dependency of this Launcher, a JobRepository. The JobRepository 
+		is used to obtain a valid JobExecution. The Repository must be used because 
+		the provided Job could be a restart of an existing JobInstance, and only 
+		the Repository can reliably recreate it. 
+	--> 
+	<bean id="jobLauncher"
+		class="org.springframework.batch.core.launch.support.SimpleJobLauncher">
+		<property name="jobRepository" ref="jobRepository" />
+	</bean>
+
+</beans>
