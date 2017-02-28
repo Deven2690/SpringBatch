@@ -16,7 +16,7 @@ This project is use to define how to inherit the functionality of Parent Job in 
 
 
 
-Project : SpringMapJobRepositoryFactoryBeanExample
+Project : SpringMapJobRepositoryFactoryBeanExample :
 In-Memory Repository
 There are scenarios in which you may not want to persist your domain objects to the database. One reason may be speed; storing domain objects at each commit point takes extra time. Another reason may be that you just don't need to persist status for a particular job. For this reason, Spring batch provides an in-memory Map version of the job repository:
 
