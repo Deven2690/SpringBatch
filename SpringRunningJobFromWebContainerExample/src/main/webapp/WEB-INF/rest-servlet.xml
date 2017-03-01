@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:batch="http://www.springframework.org/schema/batch" xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/batch 
+		http://www.springframework.org/schema/batch/spring-batch-2.2.xsd
+		http://www.springframework.org/schema/beans 
+		http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+		http://www.springframework.org/schema/util 
+		http://www.springframework.org/schema/util/spring-util-3.2.xsd
+		http://www.springframework.org/schema/context 
+        http://www.springframework.org/schema/context/spring-context-3.0.xsd 
+        http://www.springframework.org/schema/mvc 
+        http://www.springframework.org/schema/mvc/spring-mvc-3.0.xsd">
+
+
+    <mvc:annotation-driven />
+	<context:component-scan base-package="com.devendra.crazymind" />
+	
+	<bean id="viewResolver"
+		class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+
+		<property name="prefix" value="/WEB-INF/jsp/"></property>
+		<property name="suffix" value=".jsp"></property>
+	</bean>
+	
+	<import resource="classpath:context.xml" />
+	<import resource="classpath:database.xml" />
+
+	<bean id="user" class="com.devendra.crazymind.User"></bean>
+   
+	<job id="testJob" xmlns="http://www.springframework.org/schema/batch" >
+		<step id="step1">
+			<tasklet>
+				<chunk reader="itemReader" writer="flatFileItemWriter"
+					commit-interval="1" />
+			</tasklet>
+		</step>       
+	</job>
+
+
+	<!-- This configuration read data from DB which well get write to CSV file 
+		org.springframework.batch.item.database.JdbcCursorItemReader<T> Simple item 
+		reader implementation that opens a JDBC cursor and continually retrieves 
+		the next row in the ResultSet. The statement used to open the cursor is created 
+		with the 'READ_ONLY' option since a non read-only cursor may unnecessarily 
+		lock tables or rows. It is also opened with 'TYPE_FORWARD_ONLY' option. By 
+		default the cursor will be opened using a separate connection which means 
+		that it will not participate in any transactions created as part of the step 
+		processing. Each call to read() will call the provided RowMapper, passing 
+		in the ResultSet. -->
+	<bean id="itemReader"
+		class="org.springframework.batch.item.database.JdbcCursorItemReader"
+		scope="step">
+		<property name="dataSource" ref="dataSource" />
+		<property name="sql"
+			value="select ID, USER_LOGIN, USER_PASS, AGE from USERS where age > #{jobParameters['age']}" />
+		<property name="rowMapper">
+			<bean class="com.devendra.crazymind.UserRowMapper" />
+		</property>
+	</bean>
+
+	
+
+	<!-- This configuration is CSV file writer org.springframework.batch.item.file.FlatFileItemWriter<T> 
+		This class is an item writer that writes data to a file or stream. The writer 
+		also provides restart. The location of the output file is defined by a Resource 
+		and must represent a writable file. Uses buffered writer to improve performance. 
+		The implementation is *not* thread-safe. -->
+	<bean id="flatFileItemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter">
+
+		<!-- The Path of result file -->
+		<property name="resource" value="file:csv/outputs/users.csv" />
+
+		<!-- This congifuration allow to append result to existing results <property 
+			name="appendAllowed" value="true" /> -->
+
+		<!-- This Below property delete the already created or existed record -->
+		<property name="shouldDeleteIfExists" value="true" />
+
+
+		<property name="lineAggregator">
+			<bean
+				class="org.springframework.batch.item.file.transform.DelimitedLineAggregator">
+				<property name="delimiter" value="," />
+				<property name="fieldExtractor">
+					<bean
+						class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
+						<property name="names" value="id, username, password, age" />
+					</bean>
+				</property>
+			</bean>
+		</property>
+	</bean>
+</beans>
